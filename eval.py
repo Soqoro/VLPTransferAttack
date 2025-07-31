@@ -437,7 +437,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--cuda_id', default=0, type=int)
 
-    parser.add_argument('--model_list', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'], type=list)
+    parser.add_argument('--model_list', nargs='+', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'])
     parser.add_argument('--source_model', default='ALBEF', type=str)
     parser.add_argument('--source_text_encoder', default='bert-base-uncased', type=str)   
     parser.add_argument('--target_text_encoder', default='bert-base-uncased', type=str)

@@ -1,6 +1,6 @@
 # test_file: './data_annotation/refcoco+_val_for_adv.json'
 test_file: './data_annotation/coco_test.json'
-image_root: '/mnt/data/sensen/cross_task/BLIP/mscoco/'
+image_root: './datasets2/'
 
 bert_config: './configs/config_bert.json'
 

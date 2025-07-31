@@ -1,7 +1,7 @@
 import argparse
 import os
 
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
 import numpy as np
 import random
 import time
@@ -449,6 +449,8 @@ if __name__ == '__main__':
     parser.add_argument('--scales', type=str, default='0.5,0.75,1.25,1.5')
     args = parser.parse_args()
 
-    config = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+    yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing
+    with open(args.config, 'r') as f:
+      config = yaml_loader.load(f)
 
     main(args, config)    

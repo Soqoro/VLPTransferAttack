@@ -1,7 +1,7 @@
 import argparse
 import os
 
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
 import numpy as np
 import random
 import time
@@ -106,7 +106,7 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
 
         adv_images, adv_texts,execuate_time = attacker.attack(images, texts, txt2img, device=device,
                                                 max_length=max_length, scales=scales)
-        
+
         with torch.no_grad():
             s_adv_images_norm = images_normalize(adv_images)
             if args.source_model in ['ALBEF', 'TCL']:
@@ -156,7 +156,7 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
         s_sims_matrix = s_feat_dict['s_image_feats'] @ s_feat_dict['s_text_feats'].t()
         s_score_matrix_i2t = s_sims_matrix.cpu().numpy()
         s_score_matrix_t2i = s_sims_matrix.t().cpu().numpy()
-    
+
     t_score_matrix_i2ts= [] 
     t_score_matrix_t2is= []
     for t_model_name,t_feat_dict,t_model in zip(t_model_names,t_feat_dicts,t_models):
@@ -242,7 +242,7 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     after_attack_tr1 = np.where(ranks < 1)[0]
     after_attack_tr5 = np.where(ranks < 5)[0]
     after_attack_tr10 = np.where(ranks < 10)[0]
-    
+
     original_rank_index_path = args.original_rank_index_path
     origin_tr1 = np.load(f'{original_rank_index_path}/{model_name}_tr1_rank_index.npy')
     origin_tr5 = np.load(f'{original_rank_index_path}/{model_name}_tr5_rank_index.npy')
@@ -299,7 +299,7 @@ def load_model(args,model_name,text_encoder, device):
         model, preprocess = clip.load(model_name, device=device)
         model.set_tokenizer(tokenizer)
         return model, ref_model, tokenizer
-    
+
     try:
         state_dict = checkpoint['model']
     except:
@@ -317,7 +317,7 @@ def load_model(args,model_name,text_encoder, device):
             state_dict[encoder_key] = state_dict[key]
             del state_dict[key]
     model.load_state_dict(state_dict, strict=False)
-    
+
     return model, ref_model, tokenizer
 
 def eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, t_test_transforms, data_loader, device, args, config):
@@ -329,10 +329,10 @@ def eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, 
 
     print("Start eval")
     start_time = time.time()
-    
+
     score_i2t, score_t2i, t_score_i2ts, t_score_t2is = retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms,
                                                                    data_loader, tokenizer, t_tokenizers, device, args,config)
-    
+
     result_file_path = "./result.txt"
 
     with open(result_file_path, "a") as file:
@@ -354,7 +354,7 @@ def eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, 
     # for t_model_name,t_score_i2t,t_score_t2i in zip(t_model_names,t_score_i2ts,t_score_t2is):
     #     t_result = itm_eval(t_score_i2t, t_score_t2i, data_loader.dataset.img2txt, data_loader.dataset.txt2img, t_model_name)
     #     print('Performance on {}: \n {}'.format(t_model_name, t_result))
-    
+
     torch.cuda.empty_cache()
 
     total_time = time.time() - start_time
@@ -371,7 +371,7 @@ def main(args, config):
     np.random.seed(seed)
     random.seed(seed)
     cudnn.benchmark = True
-    
+
     print("Creating Source Model")
     model, ref_model, tokenizer = load_model(args,args.source_model,args.source_text_encoder, device)
 
@@ -386,10 +386,10 @@ def main(args, config):
         t_models.append(t_model)
         t_ref_models.append(t_ref_model)
         t_tokenizers.append(t_tokenizer)
-   
+
     #### Dataset ####
     print("Creating dataset")
-    
+
     s_test_transform = None
     if args.source_model in ['ALBEF', 'TCL']:
         s_test_transform = transforms.Compose([
@@ -423,7 +423,7 @@ def main(args, config):
                 # transforms.ToTensor(),
             ])
             t_test_transforms.append(t_test_transform)
-    
+
     test_dataset = paired_dataset(config['test_file'], s_test_transform, config['image_root'])
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size,
                              num_workers=4, collate_fn=test_dataset.collate_fn)
@@ -437,18 +437,20 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--cuda_id', default=0, type=int)
 
-    parser.add_argument('--model_list', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'], type=list)
+    parser.add_argument('--model_list', nargs='+', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'])
     parser.add_argument('--source_model', default='ALBEF', type=str)
     parser.add_argument('--source_text_encoder', default='bert-base-uncased', type=str)   
     parser.add_argument('--target_text_encoder', default='bert-base-uncased', type=str)
 
     parser.add_argument('--albef_ckpt', default='./checkpoints/albef_flickr.pth', type=str) 
     parser.add_argument('--tcl_ckpt', default='./checkpoints/tcl_flickr.pth', type=str)    
- 
+
     parser.add_argument('--original_rank_index_path', default='./std_eval_idx/flickr30k/')  
     parser.add_argument('--scales', type=str, default='0.5,0.75,1.25,1.5')
     args = parser.parse_args()
 
-    config = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+    yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing
+    with open(args.config, 'r') as f:
+      config = yaml_loader.load(f)
 
-    main(args, config)    
+    main(args, config)  

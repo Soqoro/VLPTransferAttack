@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from ruamel.yaml import YAML
+import ruamel.yaml as yaml
 import numpy as np
 import random
 import time
@@ -27,6 +27,7 @@ import utils
 import copy
 import time
 
+from RAttacker import Attacker, ImageAttacker, TextAttacker
 from dataset import paired_dataset
 
 def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, data_loader, tokenizer, t_tokenizers, device, args,config):
@@ -45,21 +46,13 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
 
     print('Computing features for evaluation adv...')
 
-    if args.attack_type in ['rattack', 'sga', 'sep']:
-      images_normalize = transforms.Normalize(
-        mean=(0.48145466, 0.4578275, 0.40821073),
-        std=(0.26862954, 0.26130258, 0.27577711)
-      )
-      img_attacker = ImageAttacker(images_normalize, eps=8/255, steps=10, step_size=2/255)
-    
-      max_length = 30 if args.source_model in ['ALBEF', 'TCL'] else 77 
-      txt_attacker = TextAttacker(ref_model, tokenizer, cls=False, max_length=max_length,
-                                number_perturbation=1, topk=10, threshold_pred_score=0.3)
-    
-      attacker = Attacker(model, img_attacker, txt_attacker)
+    images_normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
+    img_attacker = ImageAttacker(images_normalize, eps=8/255, steps=10, step_size=2/255)
 
-    elif args.attack_type in ['pgd', 'bert', 'co']:
-      attacker = Attacker(model)  # Already self-contained in PGDAttacker, BertAttacker, CoAttacker
+    max_length = 30 if args.source_model in ['ALBEF', 'TCL'] else 77 
+    txt_attacker = TextAttacker(ref_model, tokenizer, cls=False, max_length=max_length, number_perturbation=1,
+                                topk=10, threshold_pred_score=0.3)
+    attacker = Attacker(model, img_attacker, txt_attacker)
 
     print('Prepare memory')
     num_text = len(data_loader.dataset.text)
@@ -444,13 +437,10 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--cuda_id', default=0, type=int)
 
-    parser.add_argument('--model_list', nargs='+', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'])
+    parser.add_argument('--model_list', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'], type=list)
     parser.add_argument('--source_model', default='ALBEF', type=str)
     parser.add_argument('--source_text_encoder', default='bert-base-uncased', type=str)   
     parser.add_argument('--target_text_encoder', default='bert-base-uncased', type=str)
-    parser.add_argument('--attack_type', type=str, default='rattack',
-                    choices=['rattack', 'sga', 'pgd', 'bert', 'sep', 'co'],
-                    help='Type of adversarial attack to use')
 
     parser.add_argument('--albef_ckpt', default='./checkpoints/albef_flickr.pth', type=str) 
     parser.add_argument('--tcl_ckpt', default='./checkpoints/tcl_flickr.pth', type=str)    
@@ -459,23 +449,6 @@ if __name__ == '__main__':
     parser.add_argument('--scales', type=str, default='0.5,0.75,1.25,1.5')
     args = parser.parse_args()
 
-    if args.attack_type == "rattack":
-      from RAttacker import Attacker, ImageAttacker, TextAttacker
-    elif args.attack_type == "sga":
-      from SGAttacker import Attacker, ImageAttacker, TextAttacker
-    elif args.attack_type == "pgd":
-      from PGDAttacker import Attacker
-    elif args.attack_type == "bert":
-      from BertAttacker import Attacker
-    elif args.attack_type == "sep":
-      from SepAttacker import Attacker
-    elif args.attack_type == "co":
-      from CoAttacker import Attacker
-    else:
-      raise ValueError("Invalid attack_type")
-
-    yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing
-    with open(args.config, 'r') as f:
-      config = yaml_loader.load(f)
+    config = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
 
     main(args, config)    

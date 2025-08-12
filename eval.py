@@ -27,7 +27,9 @@ import utils
 import copy
 import time
 
-from RAttacker import Attacker, ImageAttacker, TextAttacker
+from RAttacker import Attacker as RAttacker, ImageAttacker as RImageAttacker, TextAttacker as RTextAttacker
+from SGAttacker import Attacker as SGAttacker, ImageAttacker as SGImageAttacker, TextAttacker as SGTextAttacker
+
 from dataset import paired_dataset
 
 def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, data_loader, tokenizer, t_tokenizers, device, args,config):
@@ -46,13 +48,20 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
 
     print('Computing features for evaluation adv...')
 
-    images_normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-    img_attacker = ImageAttacker(images_normalize, eps=8/255, steps=10, step_size=2/255)
+    images_normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073),(0.26862954, 0.26130258, 0.27577711))
+    # Convert CLI-friendly units (1/255) to actual floats
+    _eps = args.eps / 255.0
+    _step_size = args.step_size / 255.0
 
-    max_length = 30 if args.source_model in ['ALBEF', 'TCL'] else 77 
-    txt_attacker = TextAttacker(ref_model, tokenizer, cls=False, max_length=max_length, number_perturbation=1,
-                                topk=10, threshold_pred_score=0.3)
-    attacker = Attacker(model, img_attacker, txt_attacker)
+    max_length = 30 if args.source_model in ['ALBEF', 'TCL'] else 77
+    if args.attacker.lower() == 'sg':
+      img_attacker = SGImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size)
+      txt_attacker = SGTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False,max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
+      attacker = SGAttacker(model, img_attacker, txt_attacker)
+    else:
+      img_attacker = RImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size,sample_numbers=args.sample_numbers)
+      txt_attacker = RTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False,max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
+      attacker = RAttacker(model, img_attacker, txt_attacker)
 
     print('Prepare memory')
     num_text = len(data_loader.dataset.text)
@@ -447,6 +456,11 @@ if __name__ == '__main__':
 
     parser.add_argument('--original_rank_index_path', default='./std_eval_idx/flickr30k/')  
     parser.add_argument('--scales', type=str, default='0.5,0.75,1.25,1.5')
+    parser.add_argument('--attacker', default='ra', choices=['ra', 'sg'], help='Choose attack implementation: ra=RAttacker, sg=SGAttacker')
+    parser.add_argument('--eps', type=float, default=8.0, help='epsilon in 1/255 units (e.g., 8 means 8/255)')
+    parser.add_argument('--steps', type=int, default=10, help='PGD steps')
+    parser.add_argument('--step_size', type=float, default=2.0, help='step size in 1/255 units (e.g., 2 means 2/255)')
+    parser.add_argument('--sample_numbers', type=int, default=5, help='Only used by RAttacker.ImageAttacker for ratio sampling')
     args = parser.parse_args()
 
     yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing

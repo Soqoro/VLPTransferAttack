@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 from torchvision import transforms
 from PIL import Image
+from torchvision.transforms.functional import to_pil_image
 
 from models.model_retrieval import ALBEF
 from models.vit import interpolate_pos_embed
@@ -31,6 +32,21 @@ from RAttacker import Attacker as RAttacker, ImageAttacker as RImageAttacker, Te
 from SGAttacker import Attacker as SGAttacker, ImageAttacker as SGImageAttacker, TextAttacker as SGTextAttacker
 
 from dataset import paired_dataset
+
+def _get_rel_image_path(dataset, img_id):
+    """
+    Return dataset-relative image path for saving, using common keys in ALBEF-style ann.
+    Falls back to COCO-style image_id if needed.
+    """
+    ann = dataset.ann[img_id]
+    for k in ['image', 'file', 'filepath', 'filename', 'img', 'img_path', 'image_path']:
+        if k in ann:
+            return ann[k]
+    if 'image_id' in ann:
+        split = getattr(dataset, 'split', '')  # e.g., 'train2014', 'val2014'
+        name = f"COCO_{split}_{int(ann['image_id']):012d}.jpg" if split else f"{int(ann['image_id']):012d}.jpg"
+        return os.path.join(split, name) if split else name
+    raise KeyError("Cannot infer relative image path from dataset annotations.")
 
 def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, data_loader, tokenizer, t_tokenizers, device, args,config):
     model.to(device)
@@ -115,6 +131,27 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
 
         adv_images, adv_texts,execuate_time = attacker.attack(images, texts, txt2img, device=device,
                                                 max_length=max_length, scales=scales)
+                                                # ---------- Save adversarial images for cross-task eval ----------
+        
+        # ---------- Save adversarial images for cross-task eval ----------
+        if getattr(args, "save_adv_dir", ""):
+            save_root = args.save_adv_dir
+            for t_img, img_id in zip(adv_images, images_ids):
+                rel_path = _get_rel_image_path(data_loader.dataset, img_id)
+                root, ext = os.path.splitext(rel_path)
+                # keep original extension unless user forces one
+                if getattr(args, "save_format", ""):
+                    ext = "." + args.save_format.lstrip(".")
+                elif not ext:
+                    ext = ".jpg"
+                out_path = os.path.join(save_root, root + ext)
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                to_pil_image(t_img.detach().cpu().clamp(0, 1)).save(out_path)
+
+        # If we're only dumping images, skip retrieval feature extraction
+        if getattr(args, "save_only", False):
+            continue
+        # -----------------------------------------------------------------
 
         with torch.no_grad():
             s_adv_images_norm = images_normalize(adv_images)
@@ -461,6 +498,12 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=10, help='PGD steps')
     parser.add_argument('--step_size', type=float, default=2.0, help='step size in 1/255 units (e.g., 2 means 2/255)')
     parser.add_argument('--sample_numbers', type=int, default=5, help='Only used by RAttacker.ImageAttacker for ratio sampling')
+    parser.add_argument('--save_adv_dir', type=str, default='',
+                    help='If set, saves adversarial images mirroring dataset structure under this root.')
+    parser.add_argument('--save_only', action='store_true',
+                    help='Only generate & save adversarial images; skip retrieval evaluation.')
+    parser.add_argument('--save_format', type=str, default='',
+                    help='Force output format (e.g., "png" or "jpg"). Default keeps original.')
     args = parser.parse_args()
 
     yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing

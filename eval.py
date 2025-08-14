@@ -33,6 +33,7 @@ from SGAttacker import Attacker as SGAttacker, ImageAttacker as SGImageAttacker,
 
 from dataset import paired_dataset
 
+
 def _get_rel_image_path(dataset, img_id):
     """
     Return dataset-relative image path for saving, using common keys in ALBEF-style ann.
@@ -48,7 +49,8 @@ def _get_rel_image_path(dataset, img_id):
         return os.path.join(split, name) if split else name
     raise KeyError("Cannot infer relative image path from dataset annotations.")
 
-def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, data_loader, tokenizer, t_tokenizers, device, args,config):
+
+def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, data_loader, tokenizer, t_tokenizers, device, args, config):
     model.to(device)
     ref_model.to(device)
     model.float()
@@ -60,24 +62,24 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
         t_ref_model.to(device)
         t_model.float()
         t_model.eval()
-        t_ref_model.eval()    
+        t_ref_model.eval()
 
     print('Computing features for evaluation adv...')
 
-    images_normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073),(0.26862954, 0.26130258, 0.27577711))
+    images_normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
     # Convert CLI-friendly units (1/255) to actual floats
     _eps = args.eps / 255.0
     _step_size = args.step_size / 255.0
 
     max_length = 30 if args.source_model in ['ALBEF', 'TCL'] else 77
     if args.attacker.lower() == 'sg':
-      img_attacker = SGImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size)
-      txt_attacker = SGTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False,max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
-      attacker = SGAttacker(model, img_attacker, txt_attacker)
+        img_attacker = SGImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size)
+        txt_attacker = SGTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False, max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
+        attacker = SGAttacker(model, img_attacker, txt_attacker)
     else:
-      img_attacker = RImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size,sample_numbers=args.sample_numbers)
-      txt_attacker = RTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False,max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
-      attacker = RAttacker(model, img_attacker, txt_attacker)
+        img_attacker = RImageAttacker(images_normalize, eps=_eps, steps=args.steps, step_size=_step_size, sample_numbers=args.sample_numbers)
+        txt_attacker = RTextAttacker(ref_net=ref_model, tokenizer=tokenizer, cls=False, max_length=max_length, number_perturbation=1, topk=10, threshold_pred_score=0.3)
+        attacker = RAttacker(model, img_attacker, txt_attacker)
 
     print('Prepare memory')
     num_text = len(data_loader.dataset.text)
@@ -97,7 +99,7 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
     t_feat_dicts = []
     t_model_names = copy.deepcopy(args.model_list)
     t_model_names.remove(args.source_model)
-    for t_model_name,t_model in zip(t_model_names,t_models):
+    for t_model_name, t_model in zip(t_model_names, t_models):
         t_feat_dict = {}
         if t_model_name in ['ALBEF', 'TCL']:
             t_feat_dict['t_image_feats'] = torch.zeros(num_image, config['embed_dim'])
@@ -125,14 +127,13 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
         for i in range(len(texts_group)):
             texts += texts_group[i]
             texts_ids += text_ids_groups[i]
-            txt2img += [i]*len(text_ids_groups[i])
+            txt2img += [i] * len(text_ids_groups[i])
 
         images = images.to(device)
 
-        adv_images, adv_texts,execuate_time = attacker.attack(images, texts, txt2img, device=device,
-                                                max_length=max_length, scales=scales)
-                                                # ---------- Save adversarial images for cross-task eval ----------
-        
+        adv_images, adv_texts, execuate_time = attacker.attack(images, texts, txt2img, device=device,
+                                                               max_length=max_length, scales=scales)
+
         # ---------- Save adversarial images for cross-task eval ----------
         if getattr(args, "save_adv_dir", ""):
             save_root = args.save_adv_dir
@@ -148,7 +149,7 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 to_pil_image(t_img.detach().cpu().clamp(0, 1)).save(out_path)
 
-        # If we're only dumping images, skip retrieval feature extraction
+        # If we're only dumping images, skip retrieval feature extraction for this batch
         if getattr(args, "save_only", False):
             continue
         # -----------------------------------------------------------------
@@ -156,8 +157,8 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
         with torch.no_grad():
             s_adv_images_norm = images_normalize(adv_images)
             if args.source_model in ['ALBEF', 'TCL']:
-                adv_texts_input = tokenizer(adv_texts, padding='max_length', truncation=True, max_length=30, 
-                                            return_tensors="pt").to(device)            
+                adv_texts_input = tokenizer(adv_texts, padding='max_length', truncation=True, max_length=30,
+                                            return_tensors="pt").to(device)
                 s_output_img = model.inference_image(s_adv_images_norm)
                 s_output_txt = model.inference_text(adv_texts_input)
 
@@ -171,15 +172,15 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
                 s_feat_dict['s_image_feats'][images_ids] = output['image_feat'].cpu().float().detach()
                 s_feat_dict['s_text_feats'][texts_ids] = output['text_feat'].cpu().float().detach()
 
-            for t_model_name,t_model,t_feat_dict,t_test_transform in zip(t_model_names,t_models,t_feat_dicts,t_test_transforms):
+            for t_model_name, t_model, t_feat_dict, t_test_transform in zip(t_model_names, t_models, t_feat_dicts, t_test_transforms):
                 t_adv_img_list = []
                 for itm in adv_images:
                     t_adv_img_list.append(t_test_transform(itm))
-                t_adv_imgs = torch.stack(t_adv_img_list, 0).to(device)            
+                t_adv_imgs = torch.stack(t_adv_img_list, 0).to(device)
                 t_adv_images_norm = images_normalize(t_adv_imgs)
                 if t_model_name in ['ALBEF', 'TCL']:
-                    adv_texts_input = tokenizer(adv_texts, padding='max_length', truncation=True, max_length=30, 
-                                        return_tensors="pt").to(device)            
+                    adv_texts_input = tokenizer(adv_texts, padding='max_length', truncation=True, max_length=30,
+                                                return_tensors="pt").to(device)
                     t_output_img = t_model.inference_image(t_adv_images_norm)
                     t_output_txt = t_model.inference_text(adv_texts_input)
                     t_feat_dict['t_image_feats'][images_ids] = t_output_img['image_feat'].cpu().detach()
@@ -191,11 +192,18 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
                     output = t_model.inference(t_adv_images_norm, adv_texts)
                     t_feat_dict['t_image_feats'][images_ids] = output['image_feat'].cpu().float().detach()
                     t_feat_dict['t_text_feats'][texts_ids] = output['text_feat'].cpu().float().detach()
+
+    # -------- Save-only: early exit so we DON'T compute retrieval scores --------
+    if getattr(args, "save_only", False):
+        print(f"Save-only mode: finished saving adversarial images to {args.save_adv_dir}")
+        return None, None, [], []
+    # ---------------------------------------------------------------------------
+
     s_score_matrix_i2t = None
     s_score_matrix_t2i = None
     if args.source_model in ['ALBEF', 'TCL']:
         s_score_matrix_i2t, s_score_matrix_t2i = retrieval_score(model, s_feat_dict['s_image_feats'], s_feat_dict['s_image_embeds'], s_feat_dict['s_text_feats'],
-                                                        s_feat_dict['s_text_embeds'], s_feat_dict['s_text_atts'], num_image, num_text, device=device)
+                                                                 s_feat_dict['s_text_embeds'], s_feat_dict['s_text_atts'], num_image, num_text, device=device)
         s_score_matrix_i2t = s_score_matrix_i2t.cpu().numpy()
         s_score_matrix_t2i = s_score_matrix_t2i.cpu().numpy()
     else:
@@ -203,12 +211,12 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
         s_score_matrix_i2t = s_sims_matrix.cpu().numpy()
         s_score_matrix_t2i = s_sims_matrix.t().cpu().numpy()
 
-    t_score_matrix_i2ts= [] 
-    t_score_matrix_t2is= []
-    for t_model_name,t_feat_dict,t_model in zip(t_model_names,t_feat_dicts,t_models):
+    t_score_matrix_i2ts = []
+    t_score_matrix_t2is = []
+    for t_model_name, t_feat_dict, t_model in zip(t_model_names, t_feat_dicts, t_models):
         if t_model_name in ['ALBEF', 'TCL']:
             t_score_matrix_i2t, t_score_matrix_t2i = retrieval_score(t_model, t_feat_dict['t_image_feats'], t_feat_dict['t_image_embeds'], t_feat_dict['t_text_feats'],
-                                                        t_feat_dict['t_text_embeds'], t_feat_dict['t_text_atts'], num_image, num_text, device=device)
+                                                                     t_feat_dict['t_text_embeds'], t_feat_dict['t_text_atts'], num_image, num_text, device=device)
             t_score_matrix_i2ts.append(t_score_matrix_i2t.cpu().numpy())
             t_score_matrix_t2is.append(t_score_matrix_t2i.cpu().numpy())
         else:
@@ -220,6 +228,7 @@ def retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms, 
 
     return s_score_matrix_i2t, s_score_matrix_t2i, \
         t_score_matrix_i2ts, t_score_matrix_t2is
+
 
 @torch.no_grad()
 def retrieval_score(model, image_feats, image_embeds, text_feats, text_embeds, text_atts, num_image, num_text, device=None):
@@ -266,6 +275,7 @@ def retrieval_score(model, image_feats, image_embeds, text_feats, text_embeds, t
 
     return score_matrix_i2t, score_matrix_t2i
 
+
 @torch.no_grad()
 def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     # Images->Text
@@ -284,7 +294,6 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     tr5 = 100.0 * len(np.where(ranks < 5)[0]) / len(ranks)
     tr10 = 100.0 * len(np.where(ranks < 10)[0]) / len(ranks)
 
-
     after_attack_tr1 = np.where(ranks < 1)[0]
     after_attack_tr5 = np.where(ranks < 5)[0]
     after_attack_tr10 = np.where(ranks < 10)[0]
@@ -294,7 +303,7 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     origin_tr5 = np.load(f'{original_rank_index_path}/{model_name}_tr5_rank_index.npy')
     origin_tr10 = np.load(f'{original_rank_index_path}/{model_name}_tr10_rank_index.npy')
 
-    asr_tr1 = round(100.0 * len(np.setdiff1d(origin_tr1, after_attack_tr1)) / len(origin_tr1), 2) 
+    asr_tr1 = round(100.0 * len(np.setdiff1d(origin_tr1, after_attack_tr1)) / len(origin_tr1), 2)
     asr_tr5 = round(100.0 * len(np.setdiff1d(origin_tr5, after_attack_tr5)) / len(origin_tr5), 2)
     asr_tr10 = round(100.0 * len(np.setdiff1d(origin_tr10, after_attack_tr10)) / len(origin_tr10), 2)
 
@@ -303,7 +312,6 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     for index, score in enumerate(scores_t2i):
         inds = np.argsort(score)[::-1]
         ranks[index] = np.where(inds == txt2img[index])[0][0]
-
 
     # Compute metrics
     ir1 = 100.0 * len(np.where(ranks < 1)[0]) / len(ranks)
@@ -318,10 +326,9 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
     origin_ir5 = np.load(f'{original_rank_index_path}/{model_name}_ir5_rank_index.npy')
     origin_ir10 = np.load(f'{original_rank_index_path}/{model_name}_ir10_rank_index.npy')
 
-    asr_ir1 = round(100.0 * len(np.setdiff1d(origin_ir1, after_attack_ir1)) / len(origin_ir1), 2) 
+    asr_ir1 = round(100.0 * len(np.setdiff1d(origin_ir1, after_attack_ir1)) / len(origin_ir1), 2)
     asr_ir5 = round(100.0 * len(np.setdiff1d(origin_ir5, after_attack_ir5)) / len(origin_ir5), 2)
     asr_ir10 = round(100.0 * len(np.setdiff1d(origin_ir10, after_attack_ir10)) / len(origin_ir10), 2)
-
 
     eval_result = {'txt_r1_ASR (txt_r1)': f'{asr_tr1}({tr1})',
                    'txt_r5_ASR (txt_r5)': f'{asr_tr5}({tr5})',
@@ -331,15 +338,14 @@ def itm_eval(scores_i2t, scores_t2i, img2txt, txt2img, model_name):
                    'img_r10_ASR (img_r10)': f'{asr_ir10}({ir10})'}
     return eval_result
 
-def load_model(args,model_name,text_encoder, device):
-    # tokenizer = BertTokenizer.from_pretrained(text_encoder)
+
+def load_model(args, model_name, text_encoder, device):
     tokenizer = BertTokenizer.from_pretrained(text_encoder)
-    ref_model = BertForMaskedLM.from_pretrained(text_encoder)    
+    ref_model = BertForMaskedLM.from_pretrained(text_encoder)
     if model_name in ['ALBEF', 'TCL']:
         model = ALBEF(config=config, text_encoder=text_encoder, tokenizer=tokenizer)
         model_ckpt = args.albef_ckpt if model_name == 'ALBEF' else args.tcl_ckpt
         checkpoint = torch.load(model_ckpt, map_location='cpu')
-    ### load checkpoint
     else:
         model_name = 'ViT-B/16' if model_name == 'CLIP_ViT' else 'RN101'
         model, preprocess = clip.load(model_name, device=device)
@@ -352,10 +358,10 @@ def load_model(args,model_name,text_encoder, device):
         state_dict = checkpoint
 
     if model_name == 'TCL':
-        pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'],model.visual_encoder)         
+        pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'], model.visual_encoder)
         state_dict['visual_encoder.pos_embed'] = pos_embed_reshaped
-        m_pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder_m.pos_embed'],model.visual_encoder_m)   
-        state_dict['visual_encoder_m.pos_embed'] = m_pos_embed_reshaped 
+        m_pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder_m.pos_embed'], model.visual_encoder_m)
+        state_dict['visual_encoder_m.pos_embed'] = m_pos_embed_reshaped
 
     for key in list(state_dict.keys()):
         if 'bert' in key:
@@ -366,23 +372,26 @@ def load_model(args,model_name,text_encoder, device):
 
     return model, ref_model, tokenizer
 
+
 def eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, t_test_transforms, data_loader, device, args, config):
-    # model = model.to(device)
-    # ref_model = ref_model.to(device)
-
-    # t_model = t_model.to(device)
-    # t_ref_model = t_ref_model.to(device)
-
     print("Start eval")
     start_time = time.time()
 
+    # -------- Save-only: just generate & save, skip evaluation/logging --------
+    if getattr(args, "save_only", False):
+        print("Save-only mode: generating & saving adversarial images; skipping retrieval evaluation/logging.")
+        retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms,
+                       data_loader, tokenizer, t_tokenizers, device, args, config)
+        return
+    # --------------------------------------------------------------------------
+
     score_i2t, score_t2i, t_score_i2ts, t_score_t2is = retrieval_eval(model, ref_model, t_models, t_ref_models, t_test_transforms,
-                                                                   data_loader, tokenizer, t_tokenizers, device, args,config)
+                                                                      data_loader, tokenizer, t_tokenizers, device, args, config)
 
     result_file_path = "./result.txt"
 
     with open(result_file_path, "a") as file:
-        file.write("\n") 
+        file.write("\n")
         result = itm_eval(score_i2t, score_t2i, data_loader.dataset.img2txt, data_loader.dataset.txt2img, args.source_model)
         file.write("Performance on {}: \n {}".format(args.source_model, result) + "\n")
 
@@ -392,20 +401,12 @@ def eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, 
             t_result = itm_eval(t_score_i2t, t_score_t2i, data_loader.dataset.img2txt, data_loader.dataset.txt2img, t_model_name)
             file.write("Performance on {}: \n {}".format(t_model_name, t_result) + "\n")
 
-    # result = itm_eval(score_i2t, score_t2i, data_loader.dataset.img2txt, data_loader.dataset.txt2img, args.source_model)
-    # print('Performance on {}: \n {}'.format(args.source_model, result))
-
-    # t_model_names = copy.deepcopy(args.model_list)
-    # t_model_names.remove(args.source_model)
-    # for t_model_name,t_score_i2t,t_score_t2i in zip(t_model_names,t_score_i2ts,t_score_t2is):
-    #     t_result = itm_eval(t_score_i2t, t_score_t2i, data_loader.dataset.img2txt, data_loader.dataset.txt2img, t_model_name)
-    #     print('Performance on {}: \n {}'.format(t_model_name, t_result))
-
     torch.cuda.empty_cache()
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Evaluate time {}'.format(total_time_str))
+
 
 def main(args, config):
     torch.cuda.set_device(args.cuda_id)
@@ -419,7 +420,7 @@ def main(args, config):
     cudnn.benchmark = True
 
     print("Creating Source Model")
-    model, ref_model, tokenizer = load_model(args,args.source_model,args.source_text_encoder, device)
+    model, ref_model, tokenizer = load_model(args, args.source_model, args.source_text_encoder, device)
 
     print("Creating Target Model")
     t_models = []
@@ -427,11 +428,15 @@ def main(args, config):
     t_tokenizers = []
     t_model_names = copy.deepcopy(args.model_list)
     t_model_names.remove(args.source_model)
-    for t_model_name in t_model_names:
-        t_model, t_ref_model, t_tokenizer = load_model(args,t_model_name, args.target_text_encoder, device)
-        t_models.append(t_model)
-        t_ref_models.append(t_ref_model)
-        t_tokenizers.append(t_tokenizer)
+
+    # -------- Save-only: skip building target models to speed up ------------
+    if not getattr(args, "save_only", False):
+        for t_model_name in t_model_names:
+            t_model, t_ref_model, t_tokenizer = load_model(args, t_model_name, args.target_text_encoder, device)
+            t_models.append(t_model)
+            t_ref_models.append(t_ref_model)
+            t_tokenizers.append(t_tokenizer)
+    # ------------------------------------------------------------------------
 
     #### Dataset ####
     print("Creating dataset")
@@ -440,33 +445,32 @@ def main(args, config):
     if args.source_model in ['ALBEF', 'TCL']:
         s_test_transform = transforms.Compose([
             transforms.Resize((config['image_res'], config['image_res']), interpolation=Image.BICUBIC),
-            transforms.ToTensor(),        
+            transforms.ToTensor(),
         ])
     else:
         n_px = model.visual.input_resolution
         s_test_transform = transforms.Compose([
             transforms.Resize(n_px, interpolation=Image.BICUBIC),
             transforms.CenterCrop(n_px),
-            transforms.ToTensor(),       
+            transforms.ToTensor(),
         ])
 
     t_test_transforms = []
-    for index,t_model_name in enumerate(t_model_names):
+    for index, t_model_name in enumerate(t_model_names):
         if t_model_name in ['ALBEF', 'TCL']:
             t_test_transform = transforms.Compose([
                 transforms.ToPILImage(),
                 transforms.Resize((config['image_res'], config['image_res']), interpolation=Image.BICUBIC),
-                transforms.ToTensor(),  
+                transforms.ToTensor(),
             ])
             t_test_transforms.append(t_test_transform)
         else:
+            # if save_only, t_models is empty; this loop only runs when not save_only
             t_model = t_models[index]
             t_n_px = t_model.visual.input_resolution
             t_test_transform = transforms.Compose([
-                # transforms.Resize(n_px, interpolation=transforms.InterpolationMode.BICUBIC),
                 transforms.Resize(t_n_px, interpolation=Image.BICUBIC),
                 transforms.CenterCrop(t_n_px),
-                # transforms.ToTensor(),
             ])
             t_test_transforms.append(t_test_transform)
 
@@ -476,6 +480,7 @@ def main(args, config):
 
     eval_asr(model, ref_model, tokenizer, t_models, t_ref_models, t_tokenizers, t_test_transforms, test_loader, device, args, config)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='./configs/Retrieval_flickr.yaml')
@@ -483,31 +488,33 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--cuda_id', default=0, type=int)
 
-    parser.add_argument('--model_list', nargs='+', default=['ALBEF','TCL','CLIP_ViT','CLIP_CNN'])
+    parser.add_argument('--model_list', nargs='+', default=['ALBEF', 'TCL', 'CLIP_ViT', 'CLIP_CNN'])
     parser.add_argument('--source_model', default='ALBEF', type=str)
-    parser.add_argument('--source_text_encoder', default='bert-base-uncased', type=str)   
+    parser.add_argument('--source_text_encoder', default='bert-base-uncased', type=str)
     parser.add_argument('--target_text_encoder', default='bert-base-uncased', type=str)
 
-    parser.add_argument('--albef_ckpt', default='./checkpoints/albef_flickr.pth', type=str) 
-    parser.add_argument('--tcl_ckpt', default='./checkpoints/tcl_flickr.pth', type=str)    
+    parser.add_argument('--albef_ckpt', default='./checkpoints/albef_flickr.pth', type=str)
+    parser.add_argument('--tcl_ckpt', default='./checkpoints/tcl_flickr.pth', type=str)
 
-    parser.add_argument('--original_rank_index_path', default='./std_eval_idx/flickr30k/')  
+    parser.add_argument('--original_rank_index_path', default='./std_eval_idx/flickr30k/')
     parser.add_argument('--scales', type=str, default='0.5,0.75,1.25,1.5')
     parser.add_argument('--attacker', default='ra', choices=['ra', 'sg'], help='Choose attack implementation: ra=RAttacker, sg=SGAttacker')
     parser.add_argument('--eps', type=float, default=8.0, help='epsilon in 1/255 units (e.g., 8 means 8/255)')
     parser.add_argument('--steps', type=int, default=10, help='PGD steps')
     parser.add_argument('--step_size', type=float, default=2.0, help='step size in 1/255 units (e.g., 2 means 2/255)')
     parser.add_argument('--sample_numbers', type=int, default=5, help='Only used by RAttacker.ImageAttacker for ratio sampling')
+
+    # Cross-task saving options
     parser.add_argument('--save_adv_dir', type=str, default='',
-                    help='If set, saves adversarial images mirroring dataset structure under this root.')
+                        help='If set, saves adversarial images mirroring dataset structure under this root.')
     parser.add_argument('--save_only', action='store_true',
-                    help='Only generate & save adversarial images; skip retrieval evaluation.')
+                        help='Only generate & save adversarial images; skip retrieval evaluation.')
     parser.add_argument('--save_format', type=str, default='',
-                    help='Force output format (e.g., "png" or "jpg"). Default keeps original.')
+                        help='Force output format (e.g., "png" or "jpg"). Default keeps original.')
     args = parser.parse_args()
 
     yaml_loader = YAML(typ='rt')  # 'rt' = round-trip parsing
     with open(args.config, 'r') as f:
-      config = yaml_loader.load(f)
+        config = yaml_loader.load(f)
 
-    main(args, config)  
+    main(args, config)

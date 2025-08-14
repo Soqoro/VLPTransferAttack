@@ -1,6 +1,6 @@
 import argparse
 import os
-import ruamel_yaml as yaml
+from ruamel.yaml import YAML
 import numpy as np
 import random
 import time
@@ -258,8 +258,11 @@ def main(args, config):
         if args.evaluate: 
             break                
         
-        lr_scheduler.step(epoch+warmup_steps+1)  
-        dist.barrier()   
+        lr_scheduler.step(epoch+warmup_steps+1)
+
+        # barrier only when distributed is initialized
+        if args.distributed and dist.is_available() and dist.is_initialized():
+            dist.barrier()   
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -283,13 +286,17 @@ if __name__ == '__main__':
     parser.add_argument('--distributed', default=True, type=bool)
     args = parser.parse_args()
 
-    config = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+    # ruamel.yaml modern API
+    yaml = YAML(typ='rt')  # round-trip to preserve formatting if needed
+    with open(args.config, 'r') as f:
+        config = yaml.load(f)
 
     args.result_dir = os.path.join(args.output_dir, 'result')
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     Path(args.result_dir).mkdir(parents=True, exist_ok=True)
         
-    yaml.dump(config, open(os.path.join(args.output_dir, 'config.yaml'), 'w'))    
+    with open(os.path.join(args.output_dir, 'config.yaml'), 'w') as f:
+        yaml.dump(config, f)
     
     main(args, config)
